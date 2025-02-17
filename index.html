@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Skin Mixer</title>
+</head>
+<body>
+    <h1>Minecraft Skin Mixer</h1>
+    <label for="player1">Player Name 1:</label>
+    <input type="text" id="player1" placeholder="Steve">
+    <br>
+    <label for="player2">Player Name 2:</label>
+    <input type="text" id="player2" placeholder="Alex">
+    <br><br>
+    <button onclick="mixSkins()">Mix Skins</button>
+    <br><br>
+    <canvas id="resultCanvas" width="64" height="64" style="border: 1px solid black;"></canvas>
+
+    <script>
+        async function getSkinUrl(playerName) {
+            const response = await fetch(`https://api.mojang.com/users/profiles/minecraft/${playerName}`);
+            if (!response.ok) throw new Error(`Player not found: ${playerName}`);
+            const { id } = await response.json();
+
+            const profileResponse = await fetch(`https://sessionserver.mojang.com/session/minecraft/profile/${id}`);
+            const profileData = await profileResponse.json();
+            const textures = JSON.parse(atob(profileData.properties[0].value));
+            return textures.textures.SKIN.url;
+        }
+
+        async function loadSkinImage(url) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = url;
+            await new Promise((resolve) => img.onload = resolve);
+            return img;
+        }
+
+        async function mixSkins() {
+            const player1 = document.getElementById('player1').value.trim();
+            const player2 = document.getElementById('player2').value.trim();
+            const canvas = document.getElementById('resultCanvas');
+            const ctx = canvas.getContext('2d');
+
+            try {
+                const url1 = await getSkinUrl(player1);
+                const url2 = await getSkinUrl(player2);
+
+                const img1 = await loadSkinImage(url1);
+                const img2 = await loadSkinImage(url2);
+
+                const tempCanvas1 = document.createElement('canvas');
+                const tempCanvas2 = document.createElement('canvas');
+                tempCanvas1.width = tempCanvas2.width = 64;
+                tempCanvas1.height = tempCanvas2.height = 64;
+
+                const ctx1 = tempCanvas1.getContext('2d');
+                const ctx2 = tempCanvas2.getContext('2d');
+                ctx1.drawImage(img1, 0, 0, 64, 64);
+                ctx2.drawImage(img2, 0, 0, 64, 64);
+
+                const imgData1 = ctx1.getImageData(0, 0, 64, 64);
+                const imgData2 = ctx2.getImageData(0, 0, 64, 64);
+                const resultData = ctx.createImageData(64, 64);
+
+                for (let i = 0; i < imgData1.data.length; i += 4) {
+                    resultData.data[i] = imgData1.data[i] * 0.51 + imgData2.data[i] * 0.49;
+                    resultData.data[i + 1] = imgData1.data[i + 1] * 0.51 + imgData2.data[i + 1] * 0.49;
+                    resultData.data[i + 2] = imgData1.data[i + 2] * 0.51 + imgData2.data[i + 2] * 0.49;
+                    resultData.data[i + 3] = (imgData1.data[i + 3] + imgData2.data[i + 3]) / 2;
+                }
+
+                ctx.putImageData(resultData, 0, 0);
+
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+    </script>
+</body>
+</html>
