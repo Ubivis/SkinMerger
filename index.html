@@ -31,7 +31,6 @@
 
         async function loadSkinImage(url) {
             const img = new Image();
-            img.crossOrigin = 'anonymous';
             img.src = url;
             await new Promise((resolve) => img.onload = resolve);
             return img;
