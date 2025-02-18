@@ -78,7 +78,9 @@ public class MinecraftSkinDownloader {
             orcs.put("earPoints", 0);
             orcs.put("skinTonePoints", 1);
             orcs.put("smoothDarkSkinPoints", 0);
+            orcs.put("warmDarkSkinPoints", 0);
             orcs.put("paleSkinPoints", 0);
+            orcs.put("teethAndSkinBonus", 2);
 
             JSONObject humans = new JSONObject();
             humans.put("defaultPoints", 1);
@@ -86,6 +88,7 @@ public class MinecraftSkinDownloader {
             humans.put("earPoints", 0);
             humans.put("skinTonePoints", 0);
             humans.put("smoothDarkSkinPoints", 1);
+            humans.put("warmDarkSkinPoints", 2);
             humans.put("paleSkinPoints", 0);
 
             JSONObject elves = new JSONObject();
@@ -94,6 +97,7 @@ public class MinecraftSkinDownloader {
             elves.put("earPoints", 3);
             elves.put("skinTonePoints", 0);
             elves.put("smoothDarkSkinPoints", 0);
+            elves.put("warmDarkSkinPoints", 0);
             elves.put("paleSkinPoints", 0);
 
             JSONObject vampires = new JSONObject();
@@ -102,6 +106,7 @@ public class MinecraftSkinDownloader {
             vampires.put("earPoints", 0);
             vampires.put("skinTonePoints", 0);
             vampires.put("smoothDarkSkinPoints", 0);
+            vampires.put("warmDarkSkinPoints", 0);
             vampires.put("paleSkinPoints", 3);
 
             defaultRaces.put("orcs", orcs);
@@ -388,6 +393,8 @@ public class MinecraftSkinDownloader {
     boolean isOrcTone = isOrcSkinTone(skinTone);
     boolean isSmoothDarkSkin = isSmoothDarkSkin(skinTone);
     boolean isPaleSkin = isPaleSkinTone(skinTone);
+    boolean isWarmDarkSkin = isWarmDarkSkin(skinTone);
+    boolean hasWarPaint = hasWarPaint(skin);
 
     Map<String, Integer> raceScores = new HashMap<>();
 
@@ -414,6 +421,9 @@ public class MinecraftSkinDownloader {
             }
             if (isPaleSkin) {
                 score += raceData.optInt("paleSkinPoints", 0);
+            }
+            if (hasTeeth && isOrcTone) {
+                score += raceData.optInt("teethAndSkinBonus", 2);
             }
 
             raceScores.put(race, score);
@@ -492,21 +502,35 @@ private static boolean isSmoothDarkSkin(Color skinTone) {
     }
 
     public static boolean isOrcSkinTone(Color skinTone) {
-        return (skinTone.getRed() < 100 && skinTone.getGreen() > 80 && skinTone.getBlue() < 80) ||
-               (skinTone.getRed() < 90 && skinTone.getGreen() < 70 && skinTone.getBlue() < 60);
+        // Check for greenish or muddy brown (typical orc tones)
+        float[] hsb = Color.RGBtoHSB(skinTone.getRed(), skinTone.getGreen(), skinTone.getBlue(), null);
+    
+        boolean isGreenish = hsb[0] >= 0.25 && hsb[0] <= 0.45 && hsb[1] >= 0.3;
+        boolean isMuddyBrown = hsb[0] >= 0.08 && hsb[0] <= 0.15 && hsb[1] >= 0.4 && hsb[2] < 0.6;
+    
+        return isGreenish || isMuddyBrown;
     }
 
+    public static boolean isWarmDarkSkin(Color skinTone) {
+        float[] hsb = Color.RGBtoHSB(skinTone.getRed(), skinTone.getGreen(), skinTone.getBlue(), null);
+        return hsb[0] >= 0.05 && hsb[0] <= 0.15 && hsb[1] >= 0.3 && hsb[2] < 0.5; // Warm brown tones
+    }
+    
+    
+
     public static boolean detectOrcTeeth(BufferedImage skin) {
+        int teethPixels = 0;
         for (int y = 20; y <= 24; y++) {
             for (int x = 26; x <= 34; x++) {
                 Color color = new Color(skin.getRGB(x, y), true);
                 if (color.getRed() > 220 && color.getGreen() > 220 && color.getBlue() > 220) {
-                    return true;
+                    teethPixels++;
                 }
             }
         }
-        return false;
+        return teethPixels > 2; // Require at least 3 white pixels for better confidence
     }
+    
 
     public static boolean detectElfEars(BufferedImage skin) {
         for (int y = 8; y <= 12; y++) {
@@ -551,7 +575,7 @@ private static boolean isSmoothDarkSkin(Color skinTone) {
         String uniqueFileName = folderPath + "/" + imageHash + ".png";
         ImageIO.write(image, "png", new File(uniqueFileName));
     }
-    
+
     public static String getImageHash(BufferedImage image) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -574,5 +598,24 @@ private static boolean isSmoothDarkSkin(Color skinTone) {
         }
     }
 
+    public static boolean hasWarPaint(BufferedImage skin) {
+        for (int y = 8; y <= 16; y++) {
+            for (int x = 24; x <= 32; x++) {
+                Color color = new Color(skin.getRGB(x, y), true);
+                if (!isSkinTone(color)) { // Implement isSkinTone to detect skin-like colors
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    public static boolean isSkinTone(Color color) {
+        // Example logic: consider it a skin tone if the color is not too far from a known skin-tone range
+        int r = color.getRed();
+        int g = color.getGreen();
+        int b = color.getBlue();
+        return (r > 100 && r < 255) && (g > 70 && g < 200) && (b > 50 && b < 180);
+    }
 
 }
