@@ -1,0 +1,20 @@
+{
+  "orcs": {
+    "teethPoints": 3,
+    "skinTonePoints": 1,
+    "earPoints": 0,
+    "paleSkinPoints": -1
+  },
+  "vampires": {
+    "teethPoints": 3,
+    "paleSkinPoints": 2,
+    "skinTonePoints": -1
+  },
+  "humans": {
+    "defaultPoints": 1,
+    "smoothDarkSkinPoints": 1
+  },
+  "elf": {
+    "earPoints": 3
+  }
+}
