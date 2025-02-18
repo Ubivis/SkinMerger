@@ -55,7 +55,7 @@ This Java-based application automatically downloads Minecraft skins, identifies 
    java -cp .;json-20210307.jar;jsoup-1.18.3.jar MinecraftSkinDownloader 10
    ```
 
-   In this example, the application will attempt to download and process 10 skins.
+   In this example, the application will attempt to download and process 10 skins (multiplied by 24 if skinsmc is used).
 
 ## Output
 
