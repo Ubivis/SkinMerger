@@ -13,6 +13,9 @@ import java.util.*;
 import javax.imageio.ImageIO;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 public class MinecraftSkinDownloader {
 
@@ -37,17 +40,62 @@ public class MinecraftSkinDownloader {
             String apiKey = loadApiKey();
             Set<String> processedSkins = loadProcessedSkins();
 
-            JSONArray skinsList = fetchSkinsList(apiKey, numSkins);
+            Properties properties = new Properties();
+            try (FileInputStream input = new FileInputStream("config.properties")) {
+                properties.load(input);
+            }
+            String source = properties.getProperty("source", "mineskin");
 
-            for (int i = 0; i < skinsList.length(); i++) {
-                String uuid = skinsList.getJSONObject(i).getString("uuid");
+            int nameMCCount = 0;
+            int skinsMCCount = 0;
 
-                if (processedSkins.contains(uuid)) {
-                    System.out.println("Skin " + uuid + " already processed. Skipping...");
-                    continue;
+            JSONArray skinsList = new JSONArray();
+            if (source.equalsIgnoreCase("mineskin")) {
+                skinsList = fetchSkinsList(apiKey, numSkins);
+            }
+
+            for (int i = 0; i < numSkins; i++) {
+                String skinUrl;
+                String uuid = null;
+
+                if (source.equalsIgnoreCase("mineskin")) {
+                    if (i < skinsList.length()) {
+                        uuid = skinsList.getJSONObject(i).getString("uuid");
+                        if (processedSkins.contains(uuid)) {
+                            System.out.println("Skin " + uuid + " already processed. Skipping...");
+                            continue;
+                        }
+                        skinUrl = fetchSkinUrlByUuid(apiKey, uuid);
+                    } else {
+                        System.out.println("Not enough skins from Mineskin. Switching to NameMC.");
+                        skinUrl = NameMCSkinScraper.fetchRandomSkinUrl();
+                        nameMCCount++;
+                        Thread.sleep(1000);
+                    }
+                } else if (source.equalsIgnoreCase("namemc")) {
+                    skinUrl = NameMCSkinScraper.fetchRandomSkinUrl();
+                    nameMCCount++;
+                    Thread.sleep(1000);
+                } else if (source.equalsIgnoreCase("skinsmc")) {
+                    List<String> skinUrls = SkinsMCScraper.fetchRandomSkinUrls();
+                    for (String skinUrlFromList : skinUrls) {
+                        BufferedImage skinImage = downloadImage(skinUrlFromList);
+                
+                        String gender = detectGender(skinImage);
+                        String race = detectRace(skinImage);
+                        System.out.println("Detected gender: " + gender + ", race: " + race);
+                
+                        extractEyes(skinImage, gender, race);
+                        extractHair(skinImage, gender, race);
+                
+                        skinsMCCount++;
+                        Thread.sleep(10);
+                    }
+                    continue; // Skip the rest of the loop for this iteration since we processed multiple skins
                 }
-
-                String skinUrl = fetchSkinUrlByUuid(apiKey, uuid);
+                 else {
+                    throw new IllegalArgumentException("Invalid source: " + source);
+                }
 
                 BufferedImage skinImage = downloadImage(skinUrl);
 
@@ -58,13 +106,94 @@ public class MinecraftSkinDownloader {
                 extractEyes(skinImage, gender, race);
                 extractHair(skinImage, gender, race);
 
-                markSkinAsProcessed(uuid);
+                if (uuid != null) {
+                    markSkinAsProcessed(uuid);
+                }
             }
 
-            System.out.println("All skins downloaded and processed successfully!");
-        } catch (IOException e) {
+            System.out.println("All skins downloaded and processed successfully! Fetched from NameMC: " + nameMCCount + ", from SkinsMC: " + skinsMCCount);
+        } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    public static class NameMCSkinScraper {
+        public static String fetchRandomSkinUrl() throws IOException {
+            Document doc = Jsoup.connect("https://de.namemc.com/minecraft-skins/random")
+            .userAgent(getRandomUserAgent())
+            .referrer("https://google.com")
+            .header("Accept-Language", "en-US,en;q=0.5")
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+            .header("Connection", "keep-alive")
+            .header("Upgrade-Insecure-Requests", "1")
+            .timeout(8000)
+            .get();
+    
+    
+            Element skinElement = doc.selectFirst(".card-img-top");
+            if (skinElement == null) {
+                throw new IOException("Failed to find skin element.");
+            }
+    
+            String style = skinElement.attr("style");
+            String textureHash = style.substring(style.indexOf("/texture/") + 9, style.indexOf("?"));
+    
+            return "https://textures.minecraft.net/texture/" + textureHash;
+        }
+    }
+    
+    public static class SkinsMCScraper {
+        private static final String API_URL = "https://elseivnkvvyxdcgyfpuj.supabase.co/rest/v1/random_skins?select=skin&limit=24";
+    
+        public static List<String> fetchRandomSkinUrls() throws IOException {
+            Properties properties = new Properties();
+            try (FileInputStream input = new FileInputStream("config.properties")) {
+                properties.load(input);
+            }
+    
+            String apiKey = properties.getProperty("skinsmcKey");
+            if (apiKey == null || apiKey.isEmpty()) {
+                throw new IOException("skinsmcKey not found in config.properties");
+            }
+    
+            HttpURLConnection connection = (HttpURLConnection) new URL(API_URL).openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("apikey", apiKey);
+            connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+            connection.setRequestProperty("Accept-Profile", "public");
+    
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                throw new IOException("Failed to fetch skins from Supabase API: HTTP " + responseCode);
+            }
+    
+            String response = new String(connection.getInputStream().readAllBytes());
+            JSONArray skinsArray = new JSONArray(response);
+            if (skinsArray.isEmpty()) {
+                throw new IOException("No skins found in Supabase API response.");
+            }
+    
+            List<String> skinUrls = new ArrayList<>();
+            for (int i = 0; i < skinsArray.length(); i++) {
+                JSONObject skinObject = skinsArray.getJSONObject(i);
+                String skinId = skinObject.getString("skin");
+                skinUrls.add("https://mc-api.poke.dev/texture/" + skinId);
+            }
+    
+            return skinUrls;
+        }
+    }
+    
+    
+
+    private static String getRandomUserAgent() {
+        String[] userAgents = {
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Linux; Android 10; SM-A205F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        };
+        return userAgents[new Random().nextInt(userAgents.length)];
     }
 
     public static void createDefaultRacesJson() {
