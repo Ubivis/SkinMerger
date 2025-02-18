@@ -4,21 +4,22 @@ This Java-based application automatically downloads Minecraft skins, identifies 
 
 ## Features
 
-- **Automatic Skin Downloading:**\
-  Connects to the MineSkin API and retrieves a specified number of skins based on the configured API key.
-- **Gender and Race Detection:**\
-  Applies image analysis to determine whether a skin is male or female and categorizes it into one of several races (e.g., humans, orcs, elves, vampires).
-- **Feature Extraction:**\
-  Isolates and processes eyes and hair from skins, saving them as grayscale images in organized directories for further use.
-- **Duplicate Handling:**\
-  Skins are checked against a local record to avoid re-downloading and re-processing.
-- **Dynamic Race Configuration:**\
-  Includes a `races.json` file that can be customized to alter detection criteria without modifying the source code.
+- **Automatic Skin Downloading:**
+  - Supports multiple sources for skin downloads: MineSkin, SkinsMC ("Number of Skins" Parameter will be a multiplicated with 24, as SkinMC always returns 24 skin per call), and NameMC (though NameMC is not working reliably at the moment).
+  - The preferred source can be selected in `config.properties`.
+- **Gender and Race Detection:**
+  - Applies image analysis to determine whether a skin is male or female and categorizes it into one of several races (e.g., humans, orcs, elves, vampires).
+- **Feature Extraction:**
+  - Isolates and processes eyes and hair from skins, saving them as grayscale images in organized directories for further use.
+- **Duplicate Handling:**
+  - Skins are checked against a local record to avoid re-downloading and re-processing.
+- **Dynamic Race Configuration:**
+  - Includes a `races.json` file that can be customized to alter detection criteria without modifying the source code.
 
 ## Requirements
 
 - Java Development Kit (JDK) 8 or higher
-- An API key from MineSkin
+- An API key from MineSkin or SkinsMC (if using those sources)
 - Internet connection for API access
 
 ## Installation
@@ -33,7 +34,9 @@ This Java-based application automatically downloads Minecraft skins, identifies 
 2. Ensure you have the required `config.properties` file with the following content:
 
    ```
-   apiKey=your_api_key_here
+   apiKey=your_mineskin_api_key_here
+   skinsmcKey=your_skinsmc_api_key_here
+   source=mineskin   # Options: mineskin, skinsmc, namemc
    ```
 
 3. (Optional) Customize `races.json` to modify how skins are categorized. If `races.json` is not present, the application will generate a default configuration.
@@ -43,20 +46,20 @@ This Java-based application automatically downloads Minecraft skins, identifies 
 1. Compile the application:
 
    ```
-   javac -cp .;json-20210307.jar MinecraftSkinDownloader.java
+   javac -cp .;json-20210307.jar;jsoup-1.18.3.jar MinecraftSkinDownloader.java
    ```
 
 2. Run the application, providing the number of skins to download as an argument:
 
    ```
-   java -cp .;json-20210307.jar MinecraftSkinDownloader 10
+   java -cp .;json-20210307.jar;jsoup-1.18.3.jar MinecraftSkinDownloader 10
    ```
 
    In this example, the application will attempt to download and process 10 skins.
 
 ## Output
 
-- **Downloaded Skins:**\
+- **Downloaded Skins:**
   Processed skins will be saved to the configured template directories. For instance:
   ```
   templates/second_layers/humans/eyes
@@ -65,7 +68,7 @@ This Java-based application automatically downloads Minecraft skins, identifies 
   templates/base_layers/humans/male
   templates/base_layers/humans/female
   ```
-- **Processed Records:**\
+- **Processed Records:**
   Each successfully processed skin is recorded in `processed_skins.txt` to prevent redundant downloads and processing.
 
 ## Customizing Race Detection
@@ -118,19 +121,21 @@ This structure allows you to fine-tune detection logic without altering the code
 
 ## Future Enhancements
 
-- **Additional Races:**\
-  New races can be added simply by extending `races.json` and updating the appropriate templates.
-- **Improved Detection Algorithms:**\
-  Ongoing refinements to detection methods will enhance accuracy, particularly in distinguishing similar races.
-- **Integration with Other APIs:**\
-  Additional APIs could be integrated for a broader range of skin sources or to add more metadata.
+- **Additional Races:**
+  - New races can be added simply by extending `races.json` and updating the appropriate templates.
+- **Improved Detection Algorithms:**
+  - Ongoing refinements to detection methods will enhance accuracy, particularly in distinguishing similar races.
+- **Integration with Other APIs:**
+  - Additional APIs could be integrated for a broader range of skin sources or to add more metadata.
 
 ## Troubleshooting
 
-- **HTTP Errors:**\
-  Ensure the API key in `config.properties` is valid and that you have internet connectivity.
-- **Missing Folders:**\
-  If the template directories are not created, check that the application has permission to write to the project directory.
-- **Detection Issues:**\
-  Adjust `races.json` to refine detection criteria. For example, increasing or decreasing points assigned to certain features can help improve categorization.
+- **HTTP Errors:**
+  - Ensure the API key in `config.properties` is valid and that you have internet connectivity.
+- **NameMC Issues:**
+  - NameMC scraping does not currently work well and may fail frequently.
+- **Missing Folders:**
+  - If the template directories are not created, check that the application has permission to write to the project directory.
+- **Detection Issues:**
+  - Adjust `races.json` to refine detection criteria. For example, increasing or decreasing points assigned to certain features can help improve categorization.
 
