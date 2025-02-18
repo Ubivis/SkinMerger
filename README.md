@@ -7,8 +7,11 @@ This Java program downloads Minecraft skins from the Mineskin API and extracts t
 - Fetches a list of skins from the Mineskin API.
 - Downloads each skin's texture.
 - Extracts eyes and hair regions from each skin.
+- Dynamically detects eyes based on contrast with skin tone.
+- Dynamically detects hair based on color consistency, handling long and short hair.
 - Converts extracted parts to grayscale.
 - Saves unique templates based on image content hash to avoid duplicates.
+- Keeps track of already processed skins to prevent redundant downloads.
 - Organizes templates into structured folders.
 
 ## Requirements
@@ -48,7 +51,6 @@ java -cp .:json-20231013.jar MinecraftSkinDownloader 5
 This will download 5 skins, extract eye and hair templates, and save them in the `templates/` folder structure.
 
 ## Output
-- Full skins will be saved as `skin_0.png`, `skin_1.png`, etc., in the current directory.
 - Extracted grayscale eye and hair templates will be saved in:
   - `templates/second_layers/humans/eyes/`
   - `templates/second_layers/humans/hair/`
@@ -74,8 +76,9 @@ templates/
 ```
 
 ## Notes
-- The eyes and hair extraction currently uses fixed regions and basic grayscale conversion. Improvements can be made to dynamically detect these features.
+- The eyes and hair extraction currently uses dynamic detection techniques to handle different styles and colors.
 - Duplicate templates are skipped based on image content hashing.
+- The program tracks processed skins in `processed_skins.txt` to prevent re-processing the same skins.
 
 ## Troubleshooting
 - If you get `IOException` errors, ensure your `config.properties` file is correctly set up and your API key is valid.
@@ -83,4 +86,3 @@ templates/
 
 ## License
 This project is provided as-is. Feel free to modify and adapt it to your needs.
-
