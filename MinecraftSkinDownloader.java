@@ -238,10 +238,20 @@ public class MinecraftSkinDownloader {
             vampires.put("warmDarkSkinPoints", 0);
             vampires.put("paleSkinPoints", 3);
 
+            JSONObject dwarves = new JSONObject();
+            dwarves.put("defaultPoints", 1);
+            dwarves.put("teethPoints", 0);
+            dwarves.put("earPoints", 0);
+            dwarves.put("skinTonePoints", 0);
+            dwarves.put("smoothDarkSkinPoints", 0);
+            dwarves.put("warmDarkSkinPoints", 1);
+            dwarves.put("paleSkinPoints", 1);
+
             defaultRaces.put("orcs", orcs);
             defaultRaces.put("humans", humans);
             defaultRaces.put("elves", elves);
             defaultRaces.put("vampires", vampires);
+            defaultRaces.put("dwarves", dwarves);
 
             try (FileWriter writer = new FileWriter(file)) {
                 writer.write(defaultRaces.toString(4));
@@ -252,6 +262,7 @@ public class MinecraftSkinDownloader {
             }
         }
     }
+
 
     public static BufferedImage downloadImage(String urlString) throws IOException {
         URL url = new URL(urlString);
@@ -514,7 +525,7 @@ public class MinecraftSkinDownloader {
     }
 }
 
-    public static String detectRace(BufferedImage skin) {
+public static String detectRace(BufferedImage skin) {
     Color skinTone = sampleFaceSkinTone(skin);
 
     boolean hasTeeth = detectOrcTeeth(skin);
@@ -524,6 +535,7 @@ public class MinecraftSkinDownloader {
     boolean isPaleSkin = isPaleSkinTone(skinTone);
     boolean isWarmDarkSkin = isWarmDarkSkin(skinTone);
     boolean hasWarPaint = hasWarPaint(skin);
+    boolean hasBeard = detectBeard(skin, getDominantHairColor(skin));
 
     Map<String, Integer> raceScores = new HashMap<>();
 
@@ -551,10 +563,15 @@ public class MinecraftSkinDownloader {
             if (isPaleSkin) {
                 score += raceData.optInt("paleSkinPoints", 0);
             }
+            if (isWarmDarkSkin) {
+                score += raceData.optInt("warmDarkSkinPoints", 0);
+            }
             if (hasTeeth && isOrcTone) {
                 score += raceData.optInt("teethAndSkinBonus", 2);
             }
-
+            if (hasBeard) {
+                score += raceData.optInt("beardPoints", 3); // Add a strong bonus for dwarves if beard is detected.
+            }
             raceScores.put(race, score);
         }
     } catch (IOException e) {
@@ -567,6 +584,51 @@ public class MinecraftSkinDownloader {
             .map(Map.Entry::getKey)
             .orElse("humans");
 }
+
+public static Color getDominantHairColor(BufferedImage skin) {
+    int hairStartY = 0;
+    int hairEndY = 8;
+    int hairStartX = 0;
+    int hairEndX = 32;
+
+    Set<Color> hairColors = new HashSet<>();
+
+    for (int y = hairStartY; y < hairEndY; y++) {
+        for (int x = hairStartX; x < hairEndX; x++) {
+            int pixel = skin.getRGB(x, y);
+            Color color = new Color(pixel, true);
+            if (color.getAlpha() > 0) {
+                hairColors.add(color);
+            }
+        }
+    }
+
+    return getDominantColor(hairColors);
+}
+
+    public static boolean detectBeard(BufferedImage skin, Color hairColor) {
+        int beardStartY = 20;  // Below the mouth
+        int beardEndY = 30;    // Covers lower face
+        int beardStartX = 10;  // Approximate width for the beard
+        int beardEndX = 30;
+    
+        int beardPixelCount = 0;
+        int totalPixels = (beardEndX - beardStartX) * (beardEndY - beardStartY);
+        double tolerance = 30.0; // Allow slight variations in beard color
+    
+        for (int y = beardStartY; y < beardEndY; y++) {
+            for (int x = beardStartX; x < beardEndX; x++) {
+                Color pixelColor = new Color(skin.getRGB(x, y), true);
+                if (pixelColor.getAlpha() > 0 && isColorClose(pixelColor, hairColor, tolerance)) {
+                    beardPixelCount++;
+                }
+            }
+        }
+    
+        double beardCoverage = (double) beardPixelCount / totalPixels;
+        return beardCoverage > 0.3; // If more than 30% of the area has hair-like colors, it's likely a beard.
+    }
+    
 
 private static boolean isSmoothDarkSkin(Color skinTone) {
     int brightness = (skinTone.getRed() + skinTone.getGreen() + skinTone.getBlue()) / 3;
@@ -753,4 +815,5 @@ private static boolean isSmoothDarkSkin(Color skinTone) {
         return (r > 100 && r < 255) && (g > 70 && g < 200) && (b > 50 && b < 180);
     }
 
+    
 }
