@@ -1,88 +1,136 @@
-# Minecraft Skin Downloader With Extraction
+# Minecraft Skin Downloader and Feature Extractor
 
-## Overview
-This Java program downloads Minecraft skins from the Mineskin API and extracts the eyes and hair regions from each skin. The extracted parts are processed into grayscale templates and saved in organized folders for later use in procedural skin generation.
+This Java-based application automatically downloads Minecraft skins, identifies the gender and race of each skin, and extracts specific features—such as eyes and hair—for storage in pre-defined template folders.
 
 ## Features
-- Fetches a list of skins from the Mineskin API.
-- Downloads each skin's texture.
-- Extracts eyes and hair regions from each skin.
-- Dynamically detects eyes based on contrast with skin tone.
-- Dynamically detects hair based on color consistency, handling long and short hair.
-- Converts extracted parts to grayscale.
-- Saves unique templates based on image content hash to avoid duplicates.
-- Keeps track of already processed skins to prevent redundant downloads.
-- Organizes templates into structured folders.
+
+- **Automatic Skin Downloading:**\
+  Connects to the MineSkin API and retrieves a specified number of skins based on the configured API key.
+- **Gender and Race Detection:**\
+  Applies image analysis to determine whether a skin is male or female and categorizes it into one of several races (e.g., humans, orcs, elves, vampires).
+- **Feature Extraction:**\
+  Isolates and processes eyes and hair from skins, saving them as grayscale images in organized directories for further use.
+- **Duplicate Handling:**\
+  Skins are checked against a local record to avoid re-downloading and re-processing.
+- **Dynamic Race Configuration:**\
+  Includes a `races.json` file that can be customized to alter detection criteria without modifying the source code.
 
 ## Requirements
-- Java Development Kit (JDK) 11 or later.
-- Internet connection.
-- Mineskin API key (Bearer token).
 
-## Setup
-1. Create a `config.properties` file in the program directory with the following content:
-    ```
-    apiKey=YOUR_MINESKIN_API_KEY
-    ```
-   Replace `YOUR_MINESKIN_API_KEY` with your actual Mineskin API key.
+- Java Development Kit (JDK) 8 or higher
+- An API key from MineSkin
+- Internet connection for API access
 
-2. Ensure you have the following libraries (all standard in Java):
-    - `java.awt.*`
-    - `java.awt.image.*`
-    - `java.io.*`
-    - `java.net.*`
-    - `java.security.*`
-    - `java.util.*`
-    - `javax.imageio.*`
-    - `org.json.*` (download from https://stleary.github.io/JSON-java/ if not already available)
+## Installation
 
-## Compiling
-Open a terminal in the directory containing `MinecraftSkinDownloader.java` and run:
-```bash
-javac -cp .:json-20231013.jar MinecraftSkinDownloader.java
-```
-Ensure the `json-20231013.jar` (or the appropriate version of the JSON library) is in the same directory.
+1. Clone the repository:
 
-## Running
-After successful compilation, run the program with the number of skins you want to fetch:
-```bash
-java -cp .:json-20231013.jar MinecraftSkinDownloader 5
-```
-This will download 5 skins, extract eye and hair templates, and save them in the `templates/` folder structure.
+   ```
+   git clone https://github.com/your-username/MinecraftSkinDownloader.git
+   cd MinecraftSkinDownloader
+   ```
+
+2. Ensure you have the required `config.properties` file with the following content:
+
+   ```
+   apiKey=your_api_key_here
+   ```
+
+3. (Optional) Customize `races.json` to modify how skins are categorized. If `races.json` is not present, the application will generate a default configuration.
+
+## Building and Running
+
+1. Compile the application:
+
+   ```
+   javac -cp .;json-20210307.jar MinecraftSkinDownloader.java
+   ```
+
+2. Run the application, providing the number of skins to download as an argument:
+
+   ```
+   java -cp .;json-20210307.jar MinecraftSkinDownloader 10
+   ```
+
+   In this example, the application will attempt to download and process 10 skins.
 
 ## Output
-- Extracted grayscale eye and hair templates will be saved in:
-  - `templates/second_layers/humans/eyes/`
-  - `templates/second_layers/humans/hair/`
 
-## Folder Structure
-```
-templates/
-  base_layers/
-    orcs/
-    pillagers/
-    humans/
-      male/
-      female/
-  second_layers/
-    humans/
-      eyes/
-      hair/
-      other/
-    orcs/
-  professions/
-    smith/
-    farmer/
+- **Downloaded Skins:**\
+  Processed skins will be saved to the configured template directories. For instance:
+  ```
+  templates/second_layers/humans/eyes
+  templates/second_layers/humans/hair
+  templates/second_layers/orcs
+  templates/base_layers/humans/male
+  templates/base_layers/humans/female
+  ```
+- **Processed Records:**\
+  Each successfully processed skin is recorded in `processed_skins.txt` to prevent redundant downloads and processing.
+
+## Customizing Race Detection
+
+Edit the `races.json` file to adjust how gender and race are determined. For example, you can change the scoring values for certain features:
+
+```json
+{
+  "orcs": {
+    "defaultPoints": 0,
+    "teethPoints": 3,
+    "earPoints": 0,
+    "skinTonePoints": 1,
+    "smoothDarkSkinPoints": 0,
+    "warmDarkSkinPoints": 0,
+    "paleSkinPoints": 0,
+    "teethAndSkinBonus": 2
+  },
+  "humans": {
+    "defaultPoints": 1,
+    "teethPoints": 0,
+    "earPoints": 0,
+    "skinTonePoints": 0,
+    "smoothDarkSkinPoints": 1,
+    "warmDarkSkinPoints": 2,
+    "paleSkinPoints": 0
+  },
+  "elves": {
+    "defaultPoints": 0,
+    "teethPoints": 0,
+    "earPoints": 3,
+    "skinTonePoints": 0,
+    "smoothDarkSkinPoints": 0,
+    "warmDarkSkinPoints": 0,
+    "paleSkinPoints": 0
+  },
+  "vampires": {
+    "defaultPoints": 0,
+    "teethPoints": 0,
+    "earPoints": 0,
+    "skinTonePoints": 0,
+    "smoothDarkSkinPoints": 0,
+    "warmDarkSkinPoints": 0,
+    "paleSkinPoints": 3
+  }
+}
 ```
 
-## Notes
-- The eyes and hair extraction currently uses dynamic detection techniques to handle different styles and colors.
-- Duplicate templates are skipped based on image content hashing.
-- The program tracks processed skins in `processed_skins.txt` to prevent re-processing the same skins.
+This structure allows you to fine-tune detection logic without altering the code.
+
+## Future Enhancements
+
+- **Additional Races:**\
+  New races can be added simply by extending `races.json` and updating the appropriate templates.
+- **Improved Detection Algorithms:**\
+  Ongoing refinements to detection methods will enhance accuracy, particularly in distinguishing similar races.
+- **Integration with Other APIs:**\
+  Additional APIs could be integrated for a broader range of skin sources or to add more metadata.
 
 ## Troubleshooting
-- If you get `IOException` errors, ensure your `config.properties` file is correctly set up and your API key is valid.
-- If JSON library errors occur, ensure you have included `json-*.jar` in the classpath.
 
-## License
-This project is provided as-is. Feel free to modify and adapt it to your needs.
+- **HTTP Errors:**\
+  Ensure the API key in `config.properties` is valid and that you have internet connectivity.
+- **Missing Folders:**\
+  If the template directories are not created, check that the application has permission to write to the project directory.
+- **Detection Issues:**\
+  Adjust `races.json` to refine detection criteria. For example, increasing or decreasing points assigned to certain features can help improve categorization.
+
