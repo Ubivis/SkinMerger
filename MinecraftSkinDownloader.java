@@ -1,15 +1,14 @@
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
-import java.util.Objects;
-import java.util.Properties;
+import java.util.*;
 import javax.imageio.ImageIO;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -34,17 +33,26 @@ public class MinecraftSkinDownloader {
             createTemplateFolders();
 
             String apiKey = loadApiKey();
+            Set<String> processedSkins = loadProcessedSkins();
+
             JSONArray skinsList = fetchSkinsList(apiKey, numSkins);
 
             for (int i = 0; i < skinsList.length(); i++) {
                 String uuid = skinsList.getJSONObject(i).getString("uuid");
+
+                if (processedSkins.contains(uuid)) {
+                    System.out.println("Skin " + uuid + " already processed. Skipping...");
+                    continue;
+                }
+
                 String skinUrl = fetchSkinUrlByUuid(apiKey, uuid);
 
                 BufferedImage skinImage = downloadImage(skinUrl);
-                ImageIO.write(skinImage, "png", new File("skin_" + i + ".png"));
 
                 extractEyes(skinImage);
                 extractHair(skinImage);
+
+                markSkinAsProcessed(uuid);
             }
 
             System.out.println("All skins downloaded and processed successfully!");
@@ -58,6 +66,33 @@ public class MinecraftSkinDownloader {
         try (FileInputStream input = new FileInputStream("config.properties")) {
             properties.load(input);
             return properties.getProperty("apiKey");
+        }
+    }
+
+    public static Set<String> loadProcessedSkins() {
+        Set<String> processedSkins = new HashSet<>();
+        File file = new File("processed_skins.txt");
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                System.out.println("Could not create processed_skins.txt file.");
+            }
+        }
+        try {
+            List<String> lines = Files.readAllLines(file.toPath());
+            processedSkins.addAll(lines);
+        } catch (IOException e) {
+            System.out.println("Could not load processed skins file. Starting fresh.");
+        }
+        return processedSkins;
+    }
+
+    public static void markSkinAsProcessed(String uuid) {
+        try {
+            Files.writeString(Path.of("processed_skins.txt"), uuid + System.lineSeparator(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            System.out.println("Failed to mark skin as processed: " + uuid);
         }
     }
 
@@ -121,19 +156,126 @@ public class MinecraftSkinDownloader {
     public static void extractEyes(BufferedImage skin) throws IOException {
         BufferedImage eyes = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = eyes.createGraphics();
-        g.drawImage(skin.getSubimage(26, 12, 8, 4), 26, 12, null);
+
+        int eyeStartX = 24;
+        int eyeEndX = 32;
+        int eyeStartY = 8;
+        int eyeEndY = 16;
+
+        Color skinTone = sampleFaceSkinTone(skin);
+
+        boolean foundEyePixels = false;
+        for (int y = eyeStartY; y < eyeEndY; y++) {
+            for (int x = eyeStartX; x < eyeEndX; x++) {
+                int pixel = skin.getRGB(x, y);
+                Color color = new Color(pixel, true);
+                if (isLikelyEyePixel(color, skinTone)) {
+                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
+                    foundEyePixels = true;
+                }
+            }
+        }
         g.dispose();
-        convertToGrayscale(eyes);
-        saveUniqueTemplate(eyes, "templates/second_layers/humans/eyes");
+
+        if (foundEyePixels) {
+            convertToGrayscale(eyes);
+            saveUniqueTemplate(eyes, "templates/second_layers/humans/eyes");
+        } else {
+            System.out.println("No eyes detected on skin.");
+        }
     }
 
     public static void extractHair(BufferedImage skin) throws IOException {
         BufferedImage hair = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = hair.createGraphics();
-        g.drawImage(skin.getSubimage(0, 0, 32, 8), 0, 0, null);
+
+        int hairStartY = 0;
+        int hairEndY = 8;
+        int hairStartX = 0;
+        int hairEndX = 32;
+
+        Set<Color> hairColors = new HashSet<>();
+        boolean foundHair = false;
+
+        for (int y = hairStartY; y < hairEndY; y++) {
+            for (int x = hairStartX; x < hairEndX; x++) {
+                int pixel = skin.getRGB(x, y);
+                Color color = new Color(pixel, true);
+                if (color.getAlpha() > 0) {
+                    hairColors.add(color);
+                }
+            }
+        }
+
+        Color dominantHairColor = getDominantColor(hairColors);
+        double tolerance = 30.0;
+
+        for (int y = hairStartY; y < 16; y++) {
+            for (int x = hairStartX; x < hairEndX; x++) {
+                int pixel = skin.getRGB(x, y);
+                Color color = new Color(pixel, true);
+                if (color.getAlpha() > 0 && isColorClose(color, dominantHairColor, tolerance)) {
+                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
+                    foundHair = true;
+                }
+            }
+        }
         g.dispose();
-        convertToGrayscale(hair);
-        saveUniqueTemplate(hair, "templates/second_layers/humans/hair");
+
+        if (foundHair) {
+            convertToGrayscale(hair);
+            saveUniqueTemplate(hair, "templates/second_layers/humans/hair");
+        } else {
+            System.out.println("No hair detected on skin.");
+        }
+    }
+
+    private static Color getDominantColor(Set<Color> colors) {
+        int r = 0, g = 0, b = 0;
+        for (Color color : colors) {
+            r += color.getRed();
+            g += color.getGreen();
+            b += color.getBlue();
+        }
+        int size = colors.size();
+        return new Color(r / size, g / size, b / size);
+    }
+
+    private static boolean isColorClose(Color c1, Color c2, double tolerance) {
+        double distance = Math.sqrt(Math.pow(c1.getRed() - c2.getRed(), 2)
+                + Math.pow(c1.getGreen() - c2.getGreen(), 2)
+                + Math.pow(c1.getBlue() - c2.getBlue(), 2));
+        return distance <= tolerance;
+    }
+
+    private static boolean isLikelyEyePixel(Color eyePixel, Color skinTone) {
+        int eyeDiff = colorDistance(eyePixel, skinTone);
+        return eyeDiff > 40;
+    }
+
+    private static Color sampleFaceSkinTone(BufferedImage skin) {
+        List<Color> samples = Arrays.asList(
+                new Color(skin.getRGB(32, 12), true),
+                new Color(skin.getRGB(33, 12), true),
+                new Color(skin.getRGB(31, 13), true)
+        );
+
+        int r = 0, g = 0, b = 0;
+        for (Color c : samples) {
+            r += c.getRed();
+            g += c.getGreen();
+            b += c.getBlue();
+        }
+
+        int size = samples.size();
+        return new Color(r / size, g / size, b / size);
+    }
+
+    private static int colorDistance(Color c1, Color c2) {
+        int rDiff = c1.getRed() - c2.getRed();
+        int gDiff = c1.getGreen() - c2.getGreen();
+        int bDiff = c1.getBlue() - c2.getBlue();
+        return (int) Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
     }
 
     public static void convertToGrayscale(BufferedImage image) {
