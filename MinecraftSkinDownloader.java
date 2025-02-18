@@ -221,22 +221,9 @@ public class MinecraftSkinDownloader {
 
     public static void createTemplateFolders() {
         String[] folders = {
-            "templates/base_layers/vampires",
-            "templates/second_layers/vampires/eyes",
-            "templates/second_layers/vampires/hair",
-            "templates/base_layers/orcs",
-            "templates/base_layers/pillagers",
-            "templates/base_layers/humans/male",
-            "templates/base_layers/humans/female",
-            "templates/second_layers/humans/eyes",
-            "templates/second_layers/humans/hair",
-            "templates/second_layers/humans/other",
-            "templates/second_layers/orcs/eyes",
-            "templates/second_layers/orcs/hair",
-            "templates/second_layers/elf/eyes",
-            "templates/second_layers/elf/hair",
-            "templates/professions/smith",
-            "templates/professions/farmer"
+            "templates/base_layers",
+            "templates/second_layers",
+            "templates/professions"
         };
 
         for (String folder : folders) {
@@ -249,35 +236,48 @@ public class MinecraftSkinDownloader {
     }
 
     public static void extractEyes(BufferedImage skin, String gender, String race) throws IOException {
-        BufferedImage eyes = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = eyes.createGraphics();
-
-        int eyeStartX = 24;
-        int eyeEndX = 32;
-        int eyeStartY = 8;
-        int eyeEndY = 16;
-
+        BufferedImage eyesTemplate = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = eyesTemplate.createGraphics();
+    
+        int leftEyeStartX = 26, leftEyeStartY = 9;
+        int rightEyeStartX = 30, rightEyeStartY = 9;
+        int eyeWidth = 2, eyeHeight = 2;
+    
         Color skinTone = sampleFaceSkinTone(skin);
-
         boolean foundEyePixels = false;
-        for (int y = eyeStartY; y < eyeEndY; y++) {
-            for (int x = eyeStartX; x < eyeEndX; x++) {
-                int pixel = skin.getRGB(x, y);
-                Color color = new Color(pixel, true);
+    
+        // Extract left eye
+        for (int y = leftEyeStartY; y < leftEyeStartY + eyeHeight; y++) {
+            for (int x = leftEyeStartX; x < leftEyeStartX + eyeWidth; x++) {
+                Color color = new Color(skin.getRGB(x, y), true);
                 if (isLikelyEyePixel(color, skinTone)) {
-                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
+                    eyesTemplate.setRGB(x, y, color.getRGB());
                     foundEyePixels = true;
                 }
             }
         }
+    
+        // Extract right eye
+        for (int y = rightEyeStartY; y < rightEyeStartY + eyeHeight; y++) {
+            for (int x = rightEyeStartX; x < rightEyeStartX + eyeWidth; x++) {
+                Color color = new Color(skin.getRGB(x, y), true);
+                if (isLikelyEyePixel(color, skinTone)) {
+                    eyesTemplate.setRGB(x, y, color.getRGB());
+                    foundEyePixels = true;
+                }
+            }
+        }
+    
         g.dispose();
-
+    
         if (foundEyePixels) {
-            convertToGrayscale(eyes);
+            convertToGrayscale(eyesTemplate);
             String path = String.format("templates/second_layers/%s/eyes", race);
-            saveUniqueTemplate(eyes, path);
+            saveUniqueTemplate(eyesTemplate, path);
         }
     }
+    
+    
 
     public static void extractHair(BufferedImage skin, String gender, String race) throws IOException {
         BufferedImage hair = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
@@ -454,8 +454,14 @@ private static boolean isSmoothDarkSkin(Color skinTone) {
             for (int x = 0; x < image.getWidth(); x++) {
                 int rgba = image.getRGB(x, y);
                 Color col = new Color(rgba, true);
-                int gray = (col.getRed() + col.getGreen() + col.getBlue()) / 3;
-                Color grayColor = new Color(gray, gray, gray, col.getAlpha());
+                if (col.getAlpha() == 0) {
+                    // Skip transparent pixels
+                    continue;
+                }
+                int brightness = (col.getRed() + col.getGreen() + col.getBlue()) / 3;
+                int shading = (int) (brightness * 0.8); // Slight darkening for shading effect
+                shading = Math.max(0, Math.min(255, shading));
+                Color grayColor = new Color(shading, shading, shading, col.getAlpha());
                 image.setRGB(x, y, grayColor.getRGB());
             }
         }
