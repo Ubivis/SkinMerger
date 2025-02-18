@@ -87,6 +87,8 @@ public class MinecraftSkinDownloader {
                 
                         extractEyes(skinImage, gender, race);
                         extractHair(skinImage, gender, race);
+                        extractMouth(skinImage, gender, race);
+                        extractBeard(skinImage, gender, race);
                 
                         skinsMCCount++;
                         Thread.sleep(10);
@@ -210,6 +212,7 @@ public class MinecraftSkinDownloader {
             orcs.put("warmDarkSkinPoints", 0);
             orcs.put("paleSkinPoints", 0);
             orcs.put("teethAndSkinBonus", 2);
+            orcs.put("beardPoints", -30); // Penalty for beards
 
             JSONObject humans = new JSONObject();
             humans.put("defaultPoints", 1);
@@ -219,6 +222,8 @@ public class MinecraftSkinDownloader {
             humans.put("smoothDarkSkinPoints", 1);
             humans.put("warmDarkSkinPoints", 2);
             humans.put("paleSkinPoints", 0);
+            humans.put("beardPoints", 3); 
+
 
             JSONObject elves = new JSONObject();
             elves.put("defaultPoints", 0);
@@ -228,6 +233,7 @@ public class MinecraftSkinDownloader {
             elves.put("smoothDarkSkinPoints", 0);
             elves.put("warmDarkSkinPoints", 0);
             elves.put("paleSkinPoints", 0);
+            elves.put("beardPoints", -3); // Penalty for beards
 
             JSONObject vampires = new JSONObject();
             vampires.put("defaultPoints", 0);
@@ -237,15 +243,20 @@ public class MinecraftSkinDownloader {
             vampires.put("smoothDarkSkinPoints", 0);
             vampires.put("warmDarkSkinPoints", 0);
             vampires.put("paleSkinPoints", 3);
+            vampires.put("beardPoints", -30); // Penalty for beards
 
             JSONObject dwarves = new JSONObject();
-            dwarves.put("defaultPoints", 1);
+            dwarves.put("defaultPoints", 0);
             dwarves.put("teethPoints", 0);
             dwarves.put("earPoints", 0);
             dwarves.put("skinTonePoints", 0);
             dwarves.put("smoothDarkSkinPoints", 0);
-            dwarves.put("warmDarkSkinPoints", 1);
-            dwarves.put("paleSkinPoints", 1);
+            dwarves.put("warmDarkSkinPoints", 0);
+            dwarves.put("paleSkinPoints", 0);
+            dwarves.put("teethAndSkinBonus", 0);
+            dwarves.put("earPoints", 0);
+            dwarves.put("beardPoints", 5);
+
 
             defaultRaces.put("orcs", orcs);
             defaultRaces.put("humans", humans);
@@ -374,6 +385,65 @@ public class MinecraftSkinDownloader {
             }
         }
     }
+
+    public static void extractMouth(BufferedImage skin, String gender, String race) throws IOException {
+        BufferedImage mouth = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = mouth.createGraphics();
+
+        int mouthStartX = 24;
+        int mouthEndX = 32;
+        int mouthStartY = 20;
+        int mouthEndY = 24;
+
+        boolean foundMouthPixels = false;
+        for (int y = mouthStartY; y < mouthEndY; y++) {
+            for (int x = mouthStartX; x < mouthEndX; x++) {
+                int pixel = skin.getRGB(x, y);
+                Color color = new Color(pixel, true);
+                if (color.getAlpha() > 0) {
+                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
+                    foundMouthPixels = true;
+                }
+            }
+        }
+        g.dispose();
+
+        if (foundMouthPixels) {
+            convertToGrayscale(mouth);
+            String path = String.format("templates/second_layers/%s/mouth", race);
+            saveUniqueTemplate(mouth, path);
+        }
+    }
+
+    public static void extractBeard(BufferedImage skin, String gender, String race) throws IOException {
+        BufferedImage beard = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = beard.createGraphics();
+
+        int beardStartX = 24;
+        int beardEndX = 32;
+        int beardStartY = 20;
+        int beardEndY = 28;
+
+        boolean foundBeardPixels = false;
+        for (int y = beardStartY; y < beardEndY; y++) {
+            for (int x = beardStartX; x < beardEndX; x++) {
+                int pixel = skin.getRGB(x, y);
+                Color color = new Color(pixel, true);
+                if (color.getAlpha() > 0) {
+                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
+                    foundBeardPixels = true;
+                }
+            }
+        }
+        g.dispose();
+
+        if (foundBeardPixels) {
+            convertToGrayscale(beard);
+            String path = String.format("templates/second_layers/%s/beard", race);
+            saveUniqueTemplate(beard, path);
+        }
+    }
+
 
     public static void extractEyes(BufferedImage skin, String gender, String race) throws IOException {
         BufferedImage eyesTemplate = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
@@ -606,28 +676,31 @@ public static Color getDominantHairColor(BufferedImage skin) {
     return getDominantColor(hairColors);
 }
 
-    public static boolean detectBeard(BufferedImage skin, Color hairColor) {
-        int beardStartY = 20;  // Below the mouth
-        int beardEndY = 30;    // Covers lower face
-        int beardStartX = 10;  // Approximate width for the beard
-        int beardEndX = 30;
-    
-        int beardPixelCount = 0;
-        int totalPixels = (beardEndX - beardStartX) * (beardEndY - beardStartY);
-        double tolerance = 30.0; // Allow slight variations in beard color
-    
-        for (int y = beardStartY; y < beardEndY; y++) {
-            for (int x = beardStartX; x < beardEndX; x++) {
-                Color pixelColor = new Color(skin.getRGB(x, y), true);
-                if (pixelColor.getAlpha() > 0 && isColorClose(pixelColor, hairColor, tolerance)) {
-                    beardPixelCount++;
-                }
+public static boolean detectBeard(BufferedImage skin, Color dominantHairColor) {
+    int beardStartX = 28; // Roughly under the mouth
+    int beardEndX = 35;
+    int beardStartY = 20; // Chin area
+    int beardEndY = 30;
+
+    int beardPixels = 0;
+    int totalPixels = (beardEndX - beardStartX) * (beardEndY - beardStartY);
+    double tolerance = 35.0;
+
+    for (int y = beardStartY; y < beardEndY; y++) {
+        for (int x = beardStartX; x < beardEndX; x++) {
+            Color color = new Color(skin.getRGB(x, y), true);
+            if (color.getAlpha() > 0 && isColorClose(color, dominantHairColor, tolerance)) {
+                beardPixels++;
             }
         }
-    
-        double beardCoverage = (double) beardPixelCount / totalPixels;
-        return beardCoverage > 0.3; // If more than 30% of the area has hair-like colors, it's likely a beard.
     }
+
+    double beardCoverage = (double) beardPixels / totalPixels;
+
+    // Return true if a significant part of the chin area is covered by beard-like pixels
+    return beardCoverage > 0.4; // Adjust this coverage threshold as needed
+}
+
     
 
 private static boolean isSmoothDarkSkin(Color skinTone) {
