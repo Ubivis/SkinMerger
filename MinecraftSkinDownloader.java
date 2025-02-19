@@ -19,6 +19,62 @@ import org.jsoup.nodes.Element;
 
 public class MinecraftSkinDownloader {
 
+    public static String getRandomRaceQuery() {
+        String[] races = {"orcs", "elves", "dwarves", "vampires", "humans"};
+        return races[new Random().nextInt(races.length)];
+    }
+
+    public static class NovaSkinScraper {
+        public static List<String> fetchSkinsFromNovaSkin(String query, String apiKey, String after) throws IOException {
+            String urlString = "https://api.novaskin.me/v2/search?q=" + query;
+            if (after != null && !after.isEmpty()) {
+                urlString += "&after=" + after;
+            }
+            if (apiKey != null && !apiKey.isEmpty()) {
+                urlString += "&key=" + apiKey;
+            }
+
+            URL url = new URL(urlString);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "MinecraftSkinDownloader");
+
+            if (conn.getResponseCode() != 200) {
+                throw new IOException("Failed to fetch skins from NovaSkin API: HTTP " + conn.getResponseCode());
+            }
+
+            String jsonResponse = new String(conn.getInputStream().readAllBytes());
+            JSONObject response = new JSONObject(jsonResponse);
+
+            JSONArray posts = response.getJSONArray("posts");
+            List<String> skinUrls = new ArrayList<>();
+
+            for (int i = 0; i < posts.length(); i++) {
+            String texture = posts.getJSONObject(i).getString("texture");
+               // String skinUrl = "https://mc-api.poke.dev/texture/" + texture;
+               String skinUrl = "https://t.novaskin.me/" + texture;
+
+               skinUrls.add(skinUrl);
+            }
+
+            // Save 'after' value for pagination
+            if (response.has("meta") && response.getJSONObject("meta").has("after")) {
+                String newAfter = String.valueOf(response.getJSONObject("meta").getInt("after"));
+                Properties properties = new Properties();
+                try (FileInputStream input = new FileInputStream("config.properties")) {
+                    properties.load(input);
+                }
+                properties.setProperty("last", newAfter);
+                try (FileOutputStream output = new FileOutputStream("config.properties")) {
+                    properties.store(output, null);
+                }
+            }
+
+            return skinUrls;
+        }
+    }
+
     public static void main(String[] args) {
         if (args.length < 1) {
             System.out.println("Please provide the number of skins to fetch as a parameter.");
@@ -55,7 +111,7 @@ public class MinecraftSkinDownloader {
             }
 
             for (int i = 0; i < numSkins; i++) {
-                String skinUrl;
+                String skinUrl = null;
                 String uuid = null;
 
                 if (source.equalsIgnoreCase("mineskin")) {
@@ -76,44 +132,78 @@ public class MinecraftSkinDownloader {
                     skinUrl = NameMCSkinScraper.fetchRandomSkinUrl();
                     nameMCCount++;
                     Thread.sleep(1000);
+                } else if (source.equalsIgnoreCase("novaskin")) {
+                    String novaSkinApiKey = properties.getProperty("novaSkinApiKey", "");
+                    String last = properties.getProperty("last", "");
+                    String randomRace = getRandomRaceQuery();
+
+                    List<String> skinUrls = NovaSkinScraper.fetchSkinsFromNovaSkin(randomRace, novaSkinApiKey, last);
+                    for (String skinUrlFromList : skinUrls) {
+                        try {
+                            BufferedImage skinImage = downloadImageWithFullHeaders(skinUrlFromList);
+                            if (skinImage == null) {
+                                System.out.println("Image not found for texture: " + skinUrlFromList);
+                                continue;
+                            }
+
+                            String gender = detectGender(skinImage);
+                            String race = detectRace(skinImage);
+                            System.out.println("Detected gender: " + gender + ", race: " + race);
+
+                            extractEyes(skinImage, gender, race);
+                            extractHair(skinImage, gender, race);
+                            extractMouth(skinImage, gender, race);
+                            extractBeard(skinImage, gender, race);
+
+                            Thread.sleep(500);
+                        } catch (IOException e) {
+                            System.out.println("Failed to download or process skin: " + skinUrlFromList);
+                        }
+                    }
+                    continue;
                 } else if (source.equalsIgnoreCase("skinsmc")) {
                     List<String> skinUrls = SkinsMCScraper.fetchRandomSkinUrls();
                     for (String skinUrlFromList : skinUrls) {
                         BufferedImage skinImage = downloadImage(skinUrlFromList);
-                
+
                         String gender = detectGender(skinImage);
                         String race = detectRace(skinImage);
                         System.out.println("Detected gender: " + gender + ", race: " + race);
-                
+
                         extractEyes(skinImage, gender, race);
                         extractHair(skinImage, gender, race);
                         extractMouth(skinImage, gender, race);
                         extractBeard(skinImage, gender, race);
-                
+
                         skinsMCCount++;
                         Thread.sleep(10);
                     }
-                    continue; // Skip the rest of the loop for this iteration since we processed multiple skins
-                }
-                 else {
+                    continue;
+                } else {
                     throw new IllegalArgumentException("Invalid source: " + source);
                 }
 
-                BufferedImage skinImage = downloadImage(skinUrl);
+                if (skinUrl != null) {
+                    BufferedImage skinImage = downloadImage(skinUrl);
 
-                String gender = detectGender(skinImage);
-                String race = detectRace(skinImage);
-                System.out.println("Detected gender: " + gender + ", race: " + race);
+                    if (skinImage != null) {
+                        String gender = detectGender(skinImage);
+                        String race = detectRace(skinImage);
+                        System.out.println("Detected gender: " + gender + ", race: " + race);
 
-                extractEyes(skinImage, gender, race);
-                extractHair(skinImage, gender, race);
+                        extractEyes(skinImage, gender, race);
+                        extractHair(skinImage, gender, race);
 
-                if (uuid != null) {
-                    markSkinAsProcessed(uuid);
+                        if (uuid != null) {
+                            markSkinAsProcessed(uuid);
+                        }
+                    } else {
+                        System.out.println("Failed to download or process skin: " + skinUrl);
+                    }
+                } else {
+                    System.out.println("No valid skin URL found. Skipping...");
                 }
             }
-
-            System.out.println("All skins downloaded and processed successfully! Fetched from NameMC: " + nameMCCount + ", from SkinsMC: " + skinsMCCount);
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
@@ -143,7 +233,8 @@ public class MinecraftSkinDownloader {
             return "https://textures.minecraft.net/texture/" + textureHash;
         }
     }
-    
+
+
     public static class SkinsMCScraper {
         private static final String API_URL = "https://elseivnkvvyxdcgyfpuj.supabase.co/rest/v1/random_skins?select=skin&limit=24";
     
@@ -276,9 +367,65 @@ public class MinecraftSkinDownloader {
 
 
     public static BufferedImage downloadImage(String urlString) throws IOException {
-        URL url = new URL(urlString);
-        return ImageIO.read(url);
+        try {
+            URL url = new URL(urlString);
+            return ImageIO.read(url);
+        } catch (FileNotFoundException e) {
+            System.out.println("Image not found: " + urlString);
+            return null;
+        } catch (IOException e) {
+            System.out.println("Failed to download image: " + urlString);
+            throw e;
+        }
     }
+
+    public static BufferedImage downloadImageWithHeaders(String urlString) throws IOException {
+        URL url = new URL(urlString);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setRequestProperty("User-Agent", getRandomUserAgent());
+        conn.setRequestProperty("Referer", "https://minecraft.novaskin.me/");
+        conn.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
+        conn.setRequestProperty("DNT", "1");
+        conn.setRequestProperty("Sec-Fetch-Dest", "image");
+        conn.setRequestProperty("Sec-Fetch-Mode", "no-cors");
+        conn.setRequestProperty("Sec-Fetch-Site", "same-site");
+    
+        int responseCode = conn.getResponseCode();
+        if (responseCode != 200) {
+            System.out.println("Failed to download image. HTTP Response: " + responseCode + " URL: " + urlString);
+            return null;
+        }
+    
+        return ImageIO.read(conn.getInputStream());
+    }
+
+    public static BufferedImage downloadImageWithFullHeaders(String urlString) throws IOException {
+        URL url = new URL(urlString);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setRequestProperty("User-Agent", getRandomUserAgent());
+        conn.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
+        conn.setRequestProperty("Referer", "https://minecraft.novaskin.me/");
+        conn.setRequestProperty("DNT", "1");
+        conn.setRequestProperty("Sec-Fetch-Dest", "image");
+        conn.setRequestProperty("Sec-Fetch-Mode", "no-cors");
+        conn.setRequestProperty("Sec-Fetch-Site", "same-site");
+        conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
+        conn.setRequestProperty("Cache-Control", "max-age=0");
+        conn.setRequestProperty("Connection", "keep-alive");
+    
+        int responseCode = conn.getResponseCode();
+        if (responseCode != 200) {
+            System.out.println("Failed to download image. HTTP Response: " + responseCode + " URL: " + urlString);
+            return null;
+        }
+    
+        return ImageIO.read(conn.getInputStream());
+    }
+    
+    
+    
 
     public static String loadApiKey() throws IOException {
         Properties properties = new Properties();
