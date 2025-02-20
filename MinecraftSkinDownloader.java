@@ -1,3 +1,7 @@
+import func.BaseLayer;
+import func.SecondLayer;
+import func.RaceDetection;
+import func.Helpers;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -146,15 +150,15 @@ public class MinecraftSkinDownloader {
                                 continue;
                             }
 
-                            String gender = detectGender(skinImage);
-                            String race = detectRace(skinImage);
+                            String gender = RaceDetection.detectGender(skinImage);
+                            String race = RaceDetection.detectRace(skinImage);
                             System.out.println("Detected gender: " + gender + ", race: " + race);
 
-                            extractEyes(skinImage, gender, race);
-                            extractHair(skinImage, gender, race);
-                            extractMouth(skinImage, gender, race);
-                            extractBeard(skinImage, gender, race);
-
+                            SecondLayer.extractEyes(skinImage, gender, race);
+                            SecondLayer.extractHair(skinImage, gender, race);
+                            SecondLayer.extractMouth(skinImage, gender, race);
+                            SecondLayer.extractBeard(skinImage, gender, race);
+                            BaseLayer.extractBaseLayer(skinImage, gender, race);
                             Thread.sleep(500);
                         } catch (IOException e) {
                             System.out.println("Failed to download or process skin: " + skinUrlFromList);
@@ -166,14 +170,15 @@ public class MinecraftSkinDownloader {
                     for (String skinUrlFromList : skinUrls) {
                         BufferedImage skinImage = downloadImage(skinUrlFromList);
 
-                        String gender = detectGender(skinImage);
-                        String race = detectRace(skinImage);
+                        String gender = RaceDetection.detectGender(skinImage);
+                        String race = RaceDetection.detectRace(skinImage);
                         System.out.println("Detected gender: " + gender + ", race: " + race);
 
-                        extractEyes(skinImage, gender, race);
-                        extractHair(skinImage, gender, race);
-                        extractMouth(skinImage, gender, race);
-                        extractBeard(skinImage, gender, race);
+                        SecondLayer.extractEyes(skinImage, gender, race);
+                        SecondLayer.extractHair(skinImage, gender, race);
+                        SecondLayer.extractMouth(skinImage, gender, race);
+                        SecondLayer.extractBeard(skinImage, gender, race);
+                        BaseLayer.extractBaseLayer(skinImage, gender, race);
 
                         skinsMCCount++;
                         Thread.sleep(10);
@@ -187,13 +192,15 @@ public class MinecraftSkinDownloader {
                     BufferedImage skinImage = downloadImage(skinUrl);
 
                     if (skinImage != null) {
-                        String gender = detectGender(skinImage);
-                        String race = detectRace(skinImage);
+                        String gender = RaceDetection.detectGender(skinImage);
+                        String race = RaceDetection.detectRace(skinImage);
                         System.out.println("Detected gender: " + gender + ", race: " + race);
 
-                        extractEyes(skinImage, gender, race);
-                        extractHair(skinImage, gender, race);
-
+                        SecondLayer.extractEyes(skinImage, gender, race);
+                        SecondLayer.extractHair(skinImage, gender, race);
+                        SecondLayer.extractMouth(skinImage, gender, race);
+                        SecondLayer.extractBeard(skinImage, gender, race);
+                        BaseLayer.extractBaseLayer(skinImage, gender, race);
                         if (uuid != null) {
                             markSkinAsProcessed(uuid);
                         }
@@ -467,573 +474,84 @@ public class MinecraftSkinDownloader {
         try (FileInputStream input = new FileInputStream("config.properties")) {
             properties.load(input);
         }
-
+    
         String lastParam = properties.getProperty("last", "");
         String urlString = "https://api.mineskin.org/v2/skins?size=" + size;
         if (!lastParam.isEmpty()) {
             urlString += "&after=" + lastParam;
         }
-
-        URL url = new URL(urlString);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
-        conn.setRequestProperty("Accept", "application/json");
-        conn.setRequestProperty("User-Agent", "MinecraftSkinDownloader");
-        conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-
-        if (conn.getResponseCode() != 200) {
-            throw new IOException("Failed to fetch skins list: HTTP " + conn.getResponseCode());
-        }
-
-        String jsonResponse = new String(conn.getInputStream().readAllBytes());
-        JSONObject response = new JSONObject(jsonResponse);
-
-        // Save the new 'after' value if it exists
-        if (response.has("pagination") && response.getJSONObject("pagination").has("next")) {
-            String newAfter = response.getJSONObject("pagination").getJSONObject("next").getString("after");
-            properties.setProperty("last", newAfter);
+    
+        try {
+            URL url = new URL(urlString);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "MinecraftSkinDownloader");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+    
+            if (conn.getResponseCode() != 200) {
+                throw new IOException("Failed to fetch skins list: HTTP " + conn.getResponseCode());
+            }
+    
+            String jsonResponse = new String(conn.getInputStream().readAllBytes());
+            JSONObject response = new JSONObject(jsonResponse);
+    
+            // Save the new 'after' value if it exists
+            if (response.has("pagination") && response.getJSONObject("pagination").has("next")) {
+                String newAfter = response.getJSONObject("pagination").getJSONObject("next").getString("after");
+                properties.setProperty("last", newAfter);
+            } else {
+                properties.remove("last"); // Clear if no 'next' is available
+            }
+    
             try (FileOutputStream output = new FileOutputStream("config.properties")) {
                 properties.store(output, null);
             }
-        }
-
-        return response.getJSONArray("skins");
-    }
-
-    public static String fetchSkinUrlByUuid(String apiKey, String uuid) throws IOException {
-        URL url = new URL("https://api.mineskin.org/v2/skins/" + uuid);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
-        conn.setRequestProperty("Accept", "application/json");
-        conn.setRequestProperty("User-Agent", "MinecraftSkinDownloader");
-        conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-
-        if (conn.getResponseCode() != 200) {
-            throw new IOException("Failed to fetch skin by UUID: HTTP " + conn.getResponseCode());
-        }
-
-        String jsonResponse = new String(conn.getInputStream().readAllBytes());
-        JSONObject response = new JSONObject(jsonResponse);
-        return response.getJSONObject("skin").getJSONObject("texture").getJSONObject("url").getString("skin");
-    }
-
-    public static void createTemplateFolders() {
-        String[] folders = {
-            "templates/base_layers",
-            "templates/second_layers",
-            "templates/professions"
-        };
-
-        for (String folder : folders) {
-            File dir = new File(folder);
-            if (!dir.exists()) {
-                dir.mkdirs();
-                System.out.println("Created folder: " + folder);
+    
+            return response.getJSONArray("skins");
+    
+        } catch (IOException e) {
+            System.out.println("Failed to fetch skins list, resetting 'last' parameter.");
+            properties.remove("last");
+            try (FileOutputStream output = new FileOutputStream("config.properties")) {
+                properties.store(output, null);
             }
-        }
-    }
-
-    public static void extractMouth(BufferedImage skin, String gender, String race) throws IOException {
-        BufferedImage mouth = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = mouth.createGraphics();
-
-        int mouthStartX = 24;
-        int mouthEndX = 32;
-        int mouthStartY = 20;
-        int mouthEndY = 24;
-
-        boolean foundMouthPixels = false;
-        for (int y = mouthStartY; y < mouthEndY; y++) {
-            for (int x = mouthStartX; x < mouthEndX; x++) {
-                int pixel = skin.getRGB(x, y);
-                Color color = new Color(pixel, true);
-                if (color.getAlpha() > 0) {
-                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
-                    foundMouthPixels = true;
-                }
-            }
-        }
-        g.dispose();
-
-        if (foundMouthPixels) {
-            convertToGrayscale(mouth);
-            String path = String.format("templates/second_layers/%s/mouth", race);
-            saveUniqueTemplate(mouth, path);
-        }
-    }
-
-    public static void extractBeard(BufferedImage skin, String gender, String race) throws IOException {
-        BufferedImage beard = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = beard.createGraphics();
-
-        int beardStartX = 24;
-        int beardEndX = 32;
-        int beardStartY = 20;
-        int beardEndY = 28;
-
-        boolean foundBeardPixels = false;
-        for (int y = beardStartY; y < beardEndY; y++) {
-            for (int x = beardStartX; x < beardEndX; x++) {
-                int pixel = skin.getRGB(x, y);
-                Color color = new Color(pixel, true);
-                if (color.getAlpha() > 0) {
-                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
-                    foundBeardPixels = true;
-                }
-            }
-        }
-        g.dispose();
-
-        if (foundBeardPixels) {
-            convertToGrayscale(beard);
-            String path = String.format("templates/second_layers/%s/beard", race);
-            saveUniqueTemplate(beard, path);
-        }
-    }
-
-
-    public static void extractEyes(BufferedImage skin, String gender, String race) throws IOException {
-        BufferedImage eyesTemplate = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = eyesTemplate.createGraphics();
-    
-        int leftEyeStartX = 26, leftEyeStartY = 9;
-        int rightEyeStartX = 30, rightEyeStartY = 9;
-        int eyeWidth = 2, eyeHeight = 2;
-    
-        Color skinTone = sampleFaceSkinTone(skin);
-        boolean foundEyePixels = false;
-    
-        // Extract left eye
-        for (int y = leftEyeStartY; y < leftEyeStartY + eyeHeight; y++) {
-            for (int x = leftEyeStartX; x < leftEyeStartX + eyeWidth; x++) {
-                Color color = new Color(skin.getRGB(x, y), true);
-                if (isLikelyEyePixel(color, skinTone)) {
-                    eyesTemplate.setRGB(x, y, color.getRGB());
-                    foundEyePixels = true;
-                }
-            }
-        }
-    
-        // Extract right eye
-        for (int y = rightEyeStartY; y < rightEyeStartY + eyeHeight; y++) {
-            for (int x = rightEyeStartX; x < rightEyeStartX + eyeWidth; x++) {
-                Color color = new Color(skin.getRGB(x, y), true);
-                if (isLikelyEyePixel(color, skinTone)) {
-                    eyesTemplate.setRGB(x, y, color.getRGB());
-                    foundEyePixels = true;
-                }
-            }
-        }
-    
-        g.dispose();
-    
-        if (foundEyePixels) {
-            convertToGrayscale(eyesTemplate);
-            String path = String.format("templates/second_layers/%s/eyes", race);
-            saveUniqueTemplate(eyesTemplate, path);
+            throw e;
         }
     }
     
-    
 
-    public static void extractHair(BufferedImage skin, String gender, String race) throws IOException {
-        BufferedImage hair = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = hair.createGraphics();
+        public static String fetchSkinUrlByUuid(String apiKey, String uuid) throws IOException {
+            URL url = new URL("https://api.mineskin.org/v2/skins/" + uuid);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "MinecraftSkinDownloader");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
 
-        int hairStartY = 0;
-        int hairEndY = 8;
-        int hairStartX = 0;
-        int hairEndX = 32;
+            if (conn.getResponseCode() != 200) {
+                throw new IOException("Failed to fetch skin by UUID: HTTP " + conn.getResponseCode());
+            }
 
-        Set<Color> hairColors = new HashSet<>();
-        boolean foundHair = false;
+            String jsonResponse = new String(conn.getInputStream().readAllBytes());
+            JSONObject response = new JSONObject(jsonResponse);
+            return response.getJSONObject("skin").getJSONObject("texture").getJSONObject("url").getString("skin");
+        }
 
-        for (int y = hairStartY; y < hairEndY; y++) {
-            for (int x = hairStartX; x < hairEndX; x++) {
-                int pixel = skin.getRGB(x, y);
-                Color color = new Color(pixel, true);
-                if (color.getAlpha() > 0) {
-                    hairColors.add(color);
+        public static void createTemplateFolders() {
+            String[] folders = {
+                "templates/base_layers",
+                "templates/second_layers",
+                "templates/professions"
+            };
+
+            for (String folder : folders) {
+                File dir = new File(folder);
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                    System.out.println("Created folder: " + folder);
                 }
             }
         }
 
-        Color dominantHairColor = getDominantColor(hairColors);
-        double tolerance = 30.0;
-
-        for (int y = hairStartY; y < 16; y++) {
-            for (int x = hairStartX; x < hairEndX; x++) {
-                int pixel = skin.getRGB(x, y);
-                Color color = new Color(pixel, true);
-                if (color.getAlpha() > 0 && isColorClose(color, dominantHairColor, tolerance)) {
-                    g.drawImage(skin.getSubimage(x, y, 1, 1), x, y, null);
-                    foundHair = true;
-                }
-            }
-        }
-        g.dispose();
-
-        if (foundHair) {
-            convertToGrayscale(hair);
-            String path = String.format("templates/second_layers/%s/hair", race);
-            saveUniqueTemplate(hair, path);
-        }
-    }
-
-    public static String detectGender(BufferedImage skin) {
-    int hairStartY = 0;
-    int hairEndY = 16;
-    int hairStartX = 0;
-    int hairEndX = 32;
-
-    Set<Color> hairColors = new HashSet<>();
-    int hairPixelsBelowThreshold = 0;
-    int hairLengthThreshold = 12;
-    int longHairYLimit = 20; // How far down hair can go to consider it "long"
-
-    // Collect hair colors and check for hair length below threshold
-    for (int y = hairStartY; y < hairEndY; y++) {
-        for (int x = hairStartX; x < hairEndX; x++) {
-            Color color = new Color(skin.getRGB(x, y), true);
-            if (color.getAlpha() > 0) {
-                hairColors.add(color);
-                if (y > hairLengthThreshold) {
-                    hairPixelsBelowThreshold++;
-                    if (y > longHairYLimit) {
-                        // Early exit if we are certain it's long hair
-                        return "female";
-                    }
-                }
-            }
-        }
-    }
-
-    Color dominantHairColor = getDominantColor(hairColors);
-    double tolerance = 30.0;
-    int confirmedHairPixelsBelowThreshold = 0;
-
-    for (int y = hairLengthThreshold; y < longHairYLimit; y++) {
-        for (int x = hairStartX; x < hairEndX; x++) {
-            Color color = new Color(skin.getRGB(x, y), true);
-            if (color.getAlpha() > 0 && isColorClose(color, dominantHairColor, tolerance)) {
-                confirmedHairPixelsBelowThreshold++;
-            }
-        }
-    }
-
-    boolean hasLongHair = confirmedHairPixelsBelowThreshold > 20; // Threshold for "long hair"
-
-    // Face "makeup" hint detection (reduced)
-    boolean hasFaceColorHints = false;
-    for (int y = 12; y <= 13; y++) {
-        for (int x = 30; x <= 32; x++) {
-            Color color = new Color(skin.getRGB(x, y), true);
-            if (color.getRed() > 170 && color.getGreen() < 140 && color.getBlue() < 140) {
-                hasFaceColorHints = true;
-                break;
-            }
-        }
-    }
-
-    if (hasLongHair || hasFaceColorHints) {
-        return "female";
-    } else {
-        return "male";
-    }
-}
-
-public static String detectRace(BufferedImage skin) {
-    Color skinTone = sampleFaceSkinTone(skin);
-
-    boolean hasTeeth = detectOrcTeeth(skin);
-    boolean hasPointyEars = detectElfEars(skin);
-    boolean isOrcTone = isOrcSkinTone(skinTone);
-    boolean isSmoothDarkSkin = isSmoothDarkSkin(skinTone);
-    boolean isPaleSkin = isPaleSkinTone(skinTone);
-    boolean isWarmDarkSkin = isWarmDarkSkin(skinTone);
-    boolean hasWarPaint = hasWarPaint(skin);
-    boolean hasBeard = detectBeard(skin, getDominantHairColor(skin));
-
-    Map<String, Integer> raceScores = new HashMap<>();
-
-    try {
-        String jsonContent = new String(Files.readAllBytes(Path.of("races.json")));
-        JSONObject raceConfig = new JSONObject(jsonContent);
-
-        for (String race : raceConfig.keySet()) {
-            JSONObject raceData = raceConfig.getJSONObject(race);
-
-            int score = raceData.optInt("defaultPoints", 0);
-
-            if (hasTeeth) {
-                score += raceData.optInt("teethPoints", 0);
-            }
-            if (hasPointyEars) {
-                score += raceData.optInt("earPoints", 0);
-            }
-            if (isOrcTone) {
-                score += raceData.optInt("skinTonePoints", 0);
-            }
-            if (isSmoothDarkSkin) {
-                score += raceData.optInt("smoothDarkSkinPoints", 0);
-            }
-            if (isPaleSkin) {
-                score += raceData.optInt("paleSkinPoints", 0);
-            }
-            if (isWarmDarkSkin) {
-                score += raceData.optInt("warmDarkSkinPoints", 0);
-            }
-            if (hasTeeth && isOrcTone) {
-                score += raceData.optInt("teethAndSkinBonus", 2);
-            }
-            if (hasBeard) {
-                score += raceData.optInt("beardPoints", 3); // Add a strong bonus for dwarves if beard is detected.
-            }
-            raceScores.put(race, score);
-        }
-    } catch (IOException e) {
-        e.printStackTrace();
-        return "humans"; // Fallback if JSON fails
-    }
-
-    return raceScores.entrySet().stream()
-            .max(Map.Entry.comparingByValue())
-            .map(Map.Entry::getKey)
-            .orElse("humans");
-}
-
-public static Color getDominantHairColor(BufferedImage skin) {
-    int hairStartY = 0;
-    int hairEndY = 8;
-    int hairStartX = 0;
-    int hairEndX = 32;
-
-    Set<Color> hairColors = new HashSet<>();
-
-    for (int y = hairStartY; y < hairEndY; y++) {
-        for (int x = hairStartX; x < hairEndX; x++) {
-            int pixel = skin.getRGB(x, y);
-            Color color = new Color(pixel, true);
-            if (color.getAlpha() > 0) {
-                hairColors.add(color);
-            }
-        }
-    }
-
-    return getDominantColor(hairColors);
-}
-
-public static boolean detectBeard(BufferedImage skin, Color dominantHairColor) {
-    int beardStartX = 28; // Roughly under the mouth
-    int beardEndX = 35;
-    int beardStartY = 20; // Chin area
-    int beardEndY = 30;
-
-    int beardPixels = 0;
-    int totalPixels = (beardEndX - beardStartX) * (beardEndY - beardStartY);
-    double tolerance = 35.0;
-
-    for (int y = beardStartY; y < beardEndY; y++) {
-        for (int x = beardStartX; x < beardEndX; x++) {
-            Color color = new Color(skin.getRGB(x, y), true);
-            if (color.getAlpha() > 0 && isColorClose(color, dominantHairColor, tolerance)) {
-                beardPixels++;
-            }
-        }
-    }
-
-    double beardCoverage = (double) beardPixels / totalPixels;
-
-    // Return true if a significant part of the chin area is covered by beard-like pixels
-    return beardCoverage > 0.4; // Adjust this coverage threshold as needed
-}
-
-    
-
-private static boolean isSmoothDarkSkin(Color skinTone) {
-    int brightness = (skinTone.getRed() + skinTone.getGreen() + skinTone.getBlue()) / 3;
-    return brightness < 100 && skinTone.getRed() > 40 && skinTone.getGreen() > 30 && skinTone.getBlue() > 20;
-} 
-
-    public static boolean isPaleSkinTone(Color skinTone) {
-    int brightness = (skinTone.getRed() + skinTone.getGreen() + skinTone.getBlue()) / 3;
-    return brightness > 200; // Considered pale if very bright overall
-}
-
-    public static void convertToGrayscale(BufferedImage image) {
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int rgba = image.getRGB(x, y);
-                Color col = new Color(rgba, true);
-                if (col.getAlpha() == 0) {
-                    // Skip transparent pixels
-                    continue;
-                }
-                int brightness = (col.getRed() + col.getGreen() + col.getBlue()) / 3;
-                int shading = (int) (brightness * 0.8); // Slight darkening for shading effect
-                shading = Math.max(0, Math.min(255, shading));
-                Color grayColor = new Color(shading, shading, shading, col.getAlpha());
-                image.setRGB(x, y, grayColor.getRGB());
-            }
-        }
-    }
-
-    public static Color getDominantColor(Set<Color> colors) {
-        int r = 0, g = 0, b = 0;
-        for (Color color : colors) {
-            r += color.getRed();
-            g += color.getGreen();
-            b += color.getBlue();
-        }
-        int size = colors.size();
-        return size > 0 ? new Color(r / size, g / size, b / size) : new Color(0, 0, 0);
-    }
-
-    public static boolean isColorClose(Color c1, Color c2, double tolerance) {
-        double distance = Math.sqrt(Math.pow(c1.getRed() - c2.getRed(), 2)
-                + Math.pow(c1.getGreen() - c2.getGreen(), 2)
-                + Math.pow(c1.getBlue() - c2.getBlue(), 2));
-        return distance <= tolerance;
-    }
-
-    public static Color sampleFaceSkinTone(BufferedImage skin) {
-        List<Color> samples = Arrays.asList(
-                new Color(skin.getRGB(32, 12), true),
-                new Color(skin.getRGB(33, 12), true),
-                new Color(skin.getRGB(31, 13), true)
-        );
-
-        int r = 0, g = 0, b = 0;
-        for (Color c : samples) {
-            r += c.getRed();
-            g += c.getGreen();
-            b += c.getBlue();
-        }
-        int size = samples.size();
-        return new Color(r / size, g / size, b / size);
-    }
-
-    public static boolean isLikelyEyePixel(Color eyePixel, Color skinTone) {
-        int eyeDiff = colorDistance(eyePixel, skinTone);
-        return eyeDiff > 40;
-    }
-
-    public static boolean isOrcSkinTone(Color skinTone) {
-        // Check for greenish or muddy brown (typical orc tones)
-        float[] hsb = Color.RGBtoHSB(skinTone.getRed(), skinTone.getGreen(), skinTone.getBlue(), null);
-    
-        boolean isGreenish = hsb[0] >= 0.25 && hsb[0] <= 0.45 && hsb[1] >= 0.3;
-        boolean isMuddyBrown = hsb[0] >= 0.08 && hsb[0] <= 0.15 && hsb[1] >= 0.4 && hsb[2] < 0.6;
-    
-        return isGreenish || isMuddyBrown;
-    }
-
-    public static boolean isWarmDarkSkin(Color skinTone) {
-        float[] hsb = Color.RGBtoHSB(skinTone.getRed(), skinTone.getGreen(), skinTone.getBlue(), null);
-        return hsb[0] >= 0.05 && hsb[0] <= 0.15 && hsb[1] >= 0.3 && hsb[2] < 0.5; // Warm brown tones
-    }
-    
-    
-
-    public static boolean detectOrcTeeth(BufferedImage skin) {
-        int teethPixels = 0;
-        for (int y = 20; y <= 24; y++) {
-            for (int x = 26; x <= 34; x++) {
-                Color color = new Color(skin.getRGB(x, y), true);
-                if (color.getRed() > 220 && color.getGreen() > 220 && color.getBlue() > 220) {
-                    teethPixels++;
-                }
-            }
-        }
-        return teethPixels > 2; // Require at least 3 white pixels for better confidence
-    }
-    
-
-    public static boolean detectElfEars(BufferedImage skin) {
-        for (int y = 8; y <= 12; y++) {
-            Color leftColor = new Color(skin.getRGB(0, y), true);
-            Color rightColor = new Color(skin.getRGB(39, y), true);
-
-            if (isLightColor(leftColor) || isLightColor(rightColor)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static boolean isLightColor(Color color) {
-        return color.getRed() > 180 && color.getGreen() > 180 && color.getBlue() > 180 && color.getAlpha() > 0;
-    }
-
-    private static int colorDistance(Color c1, Color c2) {
-        int rDiff = c1.getRed() - c2.getRed();
-        int gDiff = c1.getGreen() - c2.getGreen();
-        int bDiff = c1.getBlue() - c2.getBlue();
-        return (int) Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
-    }
-
-    public static void saveUniqueTemplate(BufferedImage image, String folderPath) throws IOException {
-        String imageHash = getImageHash(image);
-        File folder = new File(folderPath);
-        if (!folder.exists()) {
-            folder.mkdirs();
-        }
-        File[] existingFiles = folder.listFiles((dir, name) -> name.endsWith(".png"));
-
-        if (existingFiles != null) {
-            for (File existingFile : existingFiles) {
-                if (existingFile.getName().startsWith(imageHash)) {
-                    System.out.println("Duplicate template detected by hash, skipping save.");
-                    return;
-                }
-            }
-        }
-
-        String uniqueFileName = folderPath + "/" + imageHash + ".png";
-        ImageIO.write(image, "png", new File(uniqueFileName));
-    }
-
-    public static String getImageHash(BufferedImage image) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            for (int y = 0; y < image.getHeight(); y++) {
-                for (int x = 0; x < image.getWidth(); x++) {
-                    int rgb = image.getRGB(x, y);
-                    digest.update((byte) (rgb >> 16));
-                    digest.update((byte) (rgb >> 8));
-                    digest.update((byte) rgb);
-                }
-            }
-            byte[] hashBytes = digest.digest();
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hashBytes) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString().substring(0, 16);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IOException("Failed to compute image hash", e);
-        }
-    }
-
-    public static boolean hasWarPaint(BufferedImage skin) {
-        for (int y = 8; y <= 16; y++) {
-            for (int x = 24; x <= 32; x++) {
-                Color color = new Color(skin.getRGB(x, y), true);
-                if (!isSkinTone(color)) { // Implement isSkinTone to detect skin-like colors
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-    
-    public static boolean isSkinTone(Color color) {
-        // Example logic: consider it a skin tone if the color is not too far from a known skin-tone range
-        int r = color.getRed();
-        int g = color.getGreen();
-        int b = color.getBlue();
-        return (r > 100 && r < 255) && (g > 70 && g < 200) && (b > 50 && b < 180);
-    }
-
-    
 }
