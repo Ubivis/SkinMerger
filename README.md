@@ -1,16 +1,16 @@
 # Minecraft Skin Downloader and Feature Extractor
 
-This Java-based application automatically downloads Minecraft skins, identifies the gender and race of each skin, and extracts specific features—such as eyes and hair—for storage in pre-defined template folders.
+This Java-based application automatically downloads Minecraft skins, identifies the gender and race of each skin, and extracts specific features—such as eyes, hair, mouth, beard, and base body layers—for storage in pre-defined template folders.
 
 ## Features
 
 - **Automatic Skin Downloading:**
-  - Supports multiple sources for skin downloads: MineSkin, SkinsMC ("Number of Skins" Parameter will be a multiplicated with 24, as SkinMC always returns 24 skin per call), and NameMC (though NameMC is not working reliably at the moment).
+  - Supports multiple sources for skin downloads: MineSkin, SkinsMC ("Number of Skins" Parameter will be multiplied by 24, as SkinMC always returns 24 skins per call), NameMC (though NameMC is not working reliably at the moment), and NovaSkin.
   - The preferred source can be selected in `config.properties`.
 - **Gender and Race Detection:**
-  - Applies image analysis to determine whether a skin is male or female and categorizes it into one of several races (e.g., humans, orcs, elves, vampires).
+  - Applies image analysis to determine whether a skin is male or female and categorizes it into one of several races (e.g., humans, orcs, elves, vampires, dwarves).
 - **Feature Extraction:**
-  - Isolates and processes eyes and hair from skins, saving them as grayscale images in organized directories for further use.
+  - Isolates and processes eyes, hair, mouth, beard, and base body layers from skins, saving them as grayscale images in organized directories for further use.
 - **Duplicate Handling:**
   - Skins are checked against a local record to avoid re-downloading and re-processing.
 - **Dynamic Race Configuration:**
@@ -36,7 +36,9 @@ This Java-based application automatically downloads Minecraft skins, identifies 
    ```
    apiKey=your_mineskin_api_key_here
    skinsmcKey=your_skinsmc_api_key_here
-   source=mineskin   # Options: mineskin, skinsmc, namemc
+   novaSkinApiKey=your_novaskin_api_key_here
+   source=mineskin   # Options: mineskin, skinsmc, namemc, novaskin
+   last=             # Optional: used for pagination with some APIs
    ```
 
 3. (Optional) Customize `races.json` to modify how skins are categorized. If `races.json` is not present, the application will generate a default configuration.
@@ -46,7 +48,7 @@ This Java-based application automatically downloads Minecraft skins, identifies 
 1. Compile the application:
 
    ```
-   javac -cp .;json-20210307.jar;jsoup-1.18.3.jar MinecraftSkinDownloader.java
+   javac -cp .;json-20210307.jar;jsoup-1.18.3.jar MinecraftSkinDownloader.java func/*.java
    ```
 
 2. Run the application, providing the number of skins to download as an argument:
@@ -55,7 +57,7 @@ This Java-based application automatically downloads Minecraft skins, identifies 
    java -cp .;json-20210307.jar;jsoup-1.18.3.jar MinecraftSkinDownloader 10
    ```
 
-   In this example, the application will attempt to download and process 10 skins (multiplied by 24 if skinsmc is used).
+   In this example, the application will attempt to download and process 10 skins.
 
 ## Output
 
@@ -64,6 +66,8 @@ This Java-based application automatically downloads Minecraft skins, identifies 
   ```
   templates/second_layers/humans/eyes
   templates/second_layers/humans/hair
+  templates/second_layers/humans/mouth
+  templates/second_layers/humans/beard
   templates/second_layers/orcs
   templates/base_layers/humans/male
   templates/base_layers/humans/female
@@ -85,7 +89,8 @@ Edit the `races.json` file to adjust how gender and race are determined. For exa
     "smoothDarkSkinPoints": 0,
     "warmDarkSkinPoints": 0,
     "paleSkinPoints": 0,
-    "teethAndSkinBonus": 2
+    "teethAndSkinBonus": 2,
+    "beardPoints": -30
   },
   "humans": {
     "defaultPoints": 1,
@@ -94,7 +99,8 @@ Edit the `races.json` file to adjust how gender and race are determined. For exa
     "skinTonePoints": 0,
     "smoothDarkSkinPoints": 1,
     "warmDarkSkinPoints": 2,
-    "paleSkinPoints": 0
+    "paleSkinPoints": 0,
+    "beardPoints": 3
   },
   "elves": {
     "defaultPoints": 0,
@@ -103,7 +109,8 @@ Edit the `races.json` file to adjust how gender and race are determined. For exa
     "skinTonePoints": 0,
     "smoothDarkSkinPoints": 0,
     "warmDarkSkinPoints": 0,
-    "paleSkinPoints": 0
+    "paleSkinPoints": 0,
+    "beardPoints": -3
   },
   "vampires": {
     "defaultPoints": 0,
@@ -112,12 +119,21 @@ Edit the `races.json` file to adjust how gender and race are determined. For exa
     "skinTonePoints": 0,
     "smoothDarkSkinPoints": 0,
     "warmDarkSkinPoints": 0,
-    "paleSkinPoints": 3
+    "paleSkinPoints": 3,
+    "beardPoints": -30
+  },
+  "dwarves": {
+    "defaultPoints": 0,
+    "teethPoints": 0,
+    "earPoints": 0,
+    "skinTonePoints": 0,
+    "smoothDarkSkinPoints": 0,
+    "warmDarkSkinPoints": 0,
+    "paleSkinPoints": 0,
+    "beardPoints": 5
   }
 }
 ```
-
-This structure allows you to fine-tune detection logic without altering the code.
 
 ## Future Enhancements
 
