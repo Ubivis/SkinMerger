@@ -6,6 +6,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.List;
 import java.io.File;
+import java.io.FileInputStream;
+
 import javax.imageio.ImageIO;
 import java.net.URL;
 import java.io.IOException;
@@ -239,4 +241,41 @@ public class Helpers {
 
         return Helpers.getDominantColor(hairColors);
     }
+
+    public static void addLimbShading(BufferedImage baseLayer, Color skinTone, String race, String gender) {
+        Properties properties = new Properties();
+        try (FileInputStream input = new FileInputStream("config.properties")) {
+            properties.load(input);
+        } catch (IOException e) {
+            System.out.println("Failed to load config.properties, using default shading values.");
+        }
+    
+        double shadingFactor;
+        String key = "shadingFactor." + race.toLowerCase() + "." + gender.toLowerCase();
+        if (properties.containsKey(key)) {
+            try {
+                shadingFactor = Double.parseDouble(properties.getProperty(key));
+            } catch (NumberFormatException e) {
+                shadingFactor = 0.85; // Fallback default
+            }
+        } else {
+            // Default fallback values if not specified in properties
+            shadingFactor = 0.85;
+        }
+    
+        // Apply shading to limbs
+        for (int y = 20; y < 32; y++) {
+            Helpers.adjustPixelBrightness(baseLayer, 44, y, skinTone, shadingFactor);
+            Helpers.adjustPixelBrightness(baseLayer, 47, y, skinTone, shadingFactor);
+            Helpers.adjustPixelBrightness(baseLayer, 36, y, skinTone, shadingFactor);
+            Helpers.adjustPixelBrightness(baseLayer, 39, y, skinTone, shadingFactor);
+            Helpers.adjustPixelBrightness(baseLayer, 4, y, skinTone, shadingFactor);
+            Helpers.adjustPixelBrightness(baseLayer, 7, y, skinTone, shadingFactor);
+        }
+        for (int y = 52; y < 64; y++) {
+            Helpers.adjustPixelBrightness(baseLayer, 20, y, skinTone, shadingFactor);
+            Helpers.adjustPixelBrightness(baseLayer, 23, y, skinTone, shadingFactor);
+        }
+    }
+    
 }
